@@ -9,16 +9,16 @@ def attention(tensor, params):
 
     S1, S2 = params
     # Flatten
-    s1 = tf.reshape(S1, [-1])
-    s2 = tf.reshape(S2, [-1])
-    s1 = tf.dtypes.cast(s1,tf.int32)
-    s2 = tf.dtypes.cast(s2,tf.int32)
+    #s1 = tf.reshape(S1, [-1])  #No USE??????
+    #s2 = tf.reshape(S2, [-1])  #No USE??????
+    s1 = tf.dtypes.cast(S1,tf.int32) #to int32
+    s2 = tf.dtypes.cast(S2,tf.int32)
 
     # Indices for slicing
-    N = tf.shape(input=tensor)[0]
-    idx = tf.stack([tf.range(N), s1, s2], axis=1)
+    N = tf.shape(input=tensor)[0] # [num] ([1,2,3,4,5,6,7 .....])
+    idx = tf.stack([tf.range(N), s1, s2], axis=1) # [num,3]
     # Slicing values
-    q_out = tf.gather_nd(tensor, idx, name='q_out')
+    q_out = tf.gather_nd(tensor, idx, name='q_out') # [num,10] 按顺序提取位于s1，s2坐标的q值[10]
 
     return q_out
 
