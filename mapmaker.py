@@ -31,13 +31,13 @@ class map():
             return
         else:
             self.numofWALL = wallnum  # 墙的数量
-            
+
         self.width = width  # 宽
         self.height = height  # 高
         self.wallnum = wallnum
         self.goalnum = goalnum
 
-    def rollME(self, singlemap, singleWidth=8,singleHeight=8):
+    def rollME(self, singlemap, singleWidth=8, singleHeight=8):
         '''Roll一个不在墙或者终点内的坐标，并返回int坐标'''
         myselfX = 0
         myselfY = 0
@@ -67,14 +67,14 @@ class map():
         '''Roll num个不在墙或者终点内的坐标，并返回singlemap'''
         listofWALL = []
         sgmap = singlemap
-        
+
         for i in range(1, width-1):  # 宽
             for j in range(1, self.height-1):  # 高
                 # [[1,1],[1,2],[1,3]....] 可以生成墙的所有坐标铺平
                 listofWALL.append([i, j])
         # 墙坐标的索引，对应listofWALL
         WALLnum = random.sample(range((height - 2) * (width - 2)), num)
-        
+
         for i in range(num):
             sgmap[listofWALL[WALLnum[i]][1]
                   ][listofWALL[WALLnum[i]][0]] = WALL  # 应用于sgmap
@@ -90,44 +90,37 @@ class map():
                     wallmap[i][j] = WALL  # 外围一圈墙
         goalmap = [[0 for col in range(singleWidth)] for row in range(
             singleHeight)]  # 目标点地图，默认width x length大小的list，数据为0
-        
+
         wallmap = self.rollWALL(
             wallmap, wallnum, singleWidth, singleHeight)  # 随机墙
-        myX, myY = self.rollME(wallmap, singleWidth,singleHeight)  # 随机agent出生位置
+        myX, myY = self.rollME(wallmap, singleWidth,
+                               singleHeight)  # 随机agent出生位置
         goalmap = self.rollGOAL(wallmap, goalmap, myX,
                                 myY, goalnum)  # 随机goal点
-        
+
         # 转为numpy，并reshape为[height,width,2]
         wallmap = np.array(wallmap)
         goalmap = np.array(goalmap)
-        print(wallmap)
-        print(goalmap)
         wallmap = wallmap.reshape(-1)
         goalmap = goalmap.reshape(-1)
-        singlemap = np.stack((wallmap,goalmap),1)
-        singlemap = singlemap.reshape((8,8,2))
-        
+        singlemap = np.stack((wallmap, goalmap), 1)
+        singlemap = singlemap.reshape((8, 8, 2))
         return singlemap.tolist(), myX, myY
-        print('RANDOM SINGLEMAP COMPLETE')
-        
-        
-    def rollNEWMULTI(self, width = 8,height = 8,wallnum = 20,goalnum=1, mapnum = 2):
+
+    def rollNEWMULTI(self, width=8, height=8, wallnum=20, goalnum=1, mapnum=2):
         mapset = []
         myX = []
         myY = []
+
         for i in range(mapnum):
-            singlemap,singleX,singleY= self.rollNEWSINGLE(width,height,wallnum,goalnum)
+            singlemap, singleX, singleY = self.rollNEWSINGLE(
+                width, height, wallnum, goalnum)
             mapset.append(singlemap)
             myX.append(singleX)
             myY.append(singleY)
-        return mapset,myX,myY
-            
-    def addtoMAPLIST(self):
-        '''添加singlemap地图到maplist中'''
-        self.maplist.append(self.singlemap)
-        print('MAP ADDED TO LIST')
+        return mapset, myX, myY
 
-    def save(self, filename):
+    def save(self, maplist=[], myXlist=[], myYlist=[], filename='number.json'):
         file_name = 'number.json'
         list = [['name', 'length', 3, 2],
                 [0, 0, 0, 0, 0],
@@ -142,7 +135,7 @@ class map():
     def load(self):
         return
 
-map1 = map(8,8,20,1)
-mtmap,s1,s2 = map1.rollNEWMULTI()
+
+map1 = map(8, 8, 20, 1)
+mtmap, s1, s2 = map1.rollNEWMULTI(8, 8, 16, 1, 100)
 mtmap = np.array(mtmap)
-print(mtmap,s1,s2)
