@@ -92,7 +92,6 @@ class VIN(tf.keras.Model):
         k = VInum  # Number of Value Iteration computations
 
         h = self.conv0(inputs) # [num, img, img, 150]
-        
         r = self.conv1(h) # [num, img, img, 1]
 
         v = tf.zeros_like(r)  # 初始化全0Value map 
@@ -107,7 +106,7 @@ class VIN(tf.keras.Model):
             q = self.conv_ShareWeights(rv)  # [num, img, img, 10]
             v = tf.reduce_max(q, axis=3, keepdims=True, name='v') # [num, img,img,1]
 
-        rv = tf.concat([r, v], axis=3) # [num, img, img, 2]
+        rv = tf.concat([r, v], axis=3) # [num, img, img, 2] 价值地图！！
         q = self.conv_ShareWeights2(rv) # [num, img, img, 10]
         q_out = attention(tensor=q, params=[S1, S2]) # [num, 10]
 
@@ -115,5 +114,5 @@ class VIN(tf.keras.Model):
 
         prob_actions = tf.nn.softmax(logits, name='probability_actions') # [num, 8] 每个动作可能性，取值0~1
 
-        return logits, prob_actions, q, q_out
+        return logits, prob_actions, rv
 

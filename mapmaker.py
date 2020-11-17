@@ -1,6 +1,7 @@
 import random
 import numpy as np
 import json
+import math
 '''
 0 = white
 1 = me
@@ -15,7 +16,7 @@ GOALNUMBER = 1
 NOMAL = 0
 ME = 2
 WALL = 1
-GOAL = 10
+GOAL = 50
 
 
 class map():
@@ -80,6 +81,49 @@ class map():
                   ][listofWALL[WALLnum[i]][0]] = WALL  # 应用于sgmap
         return sgmap
 
+    def azimuthAngle(self, x1,  y1,  x2,  y2):
+        angle = 0.0;
+        dx = x2 - x1
+        dy = y2 - y1
+        if  x2 == x1:
+            angle = math.pi / 2.0 # 真上
+            if  y2 == y1 :
+                angle = 0.0 
+            elif y2 < y1 :
+                angle = 3.0 * math.pi / 2.0 # 直下
+        elif x2 > x1 and y2 > y1: # 1 象限
+            angle = math.atan(dy / dx)
+        elif  x2 > x1 and  y2 < y1 : # 4 象限
+            angle = 3* math.pi / 2 + math.atan(-dx / dy)
+        elif  x2 < x1 and y2 < y1 : # 3 象限
+            angle = math.pi + math.atan(dy / dx)
+        elif  x2 < x1 and y2 > y1 : # 2 象限
+            angle = math.pi / 2.0 + math.atan(dx / -dy)
+        return (angle/math.pi)
+    
+    def getLable(self, myX, myY, goalX, goalY):
+        angle = self.azimuthAngle(myX,myY,goalX,goalY)
+        
+        action = 0
+        if(angle<1/8 or angle>=15/8):
+            action = 0
+        elif(angle>1/8 and angle<=3/8):
+            action = 1
+        elif(angle>3/8 and angle<=5/8):
+            action = 2
+        elif(angle>5/8 and angle<=7/8):
+            action = 3
+        elif(angle>7/8 and angle<=9/8):
+            action = 4
+        elif(angle>9/8 and angle<=11/8):
+            action = 5
+        elif(angle>11/8 and angle<=13/8):
+            action = 6
+        elif(angle>13/8 and angle<=15/8):
+            action = 7
+        
+        return action
+
     def rollNEWSINGLE(self, singleWidth=8, singleHeight=8, wallnum=20, goalnum=1):
         '''ROLL一个新地图并返回'''
         wallmap = [[0 for col in range(singleWidth)] for row in range(
@@ -101,24 +145,37 @@ class map():
         # 转为numpy，并reshape为[height,width,2]
         wallmap = np.array(wallmap)
         goalmap = np.array(goalmap)
+        goalX = np.where(goalmap == 10)[1]
+        goalY = np.where(goalmap == 10)[0]
+        lable = self.getLable(myX,myY,goalX,goalY)
         wallmap = wallmap.reshape(-1)
         goalmap = goalmap.reshape(-1)
         singlemap = np.stack((wallmap, goalmap), 1)
-        singlemap = singlemap.reshape((8, 8, 2))
-        return singlemap.tolist(), myX, myY
+        singlemap = singlemap.reshape((singleWidth, singleWidth, 2))
+        
+        
+        
+        return singlemap.tolist(), myX, myY, lable
 
     def rollNEWMULTI(self, width=8, height=8, wallnum=20, goalnum=1, mapnum=2):
         mapset = []
         myX = []
         myY = []
+        lable = []
 
         for i in range(mapnum):
-            singlemap, singleX, singleY = self.rollNEWSINGLE(
+            singlemap, singleX, singleY, singleLable = self.rollNEWSINGLE(
                 width, height, wallnum, goalnum)
             mapset.append(singlemap)
             myX.append(singleX)
             myY.append(singleY)
-        return mapset, myX, myY
+            lable.append(singleLable)
+
+        lable = np.array(lable,dtype = np.float32)
+        mapset = np.array(mapset, dtype = np.float32)
+        myX = np.array(myX, dtype = np.float32)
+        myY = np.array(myY, dtype = np.float32)
+        return mapset, myX, myY, lable
 
     def save(self, maplist=[], myXlist=[], myYlist=[], filename='number.json'):
         file_name = 'number.json'
@@ -134,8 +191,3 @@ class map():
 
     def load(self):
         return
-
-
-map1 = map(8, 8, 20, 1)
-mtmap, s1, s2 = map1.rollNEWMULTI(8, 8, 16, 1, 100)
-mtmap = np.array(mtmap)
