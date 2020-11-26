@@ -1,4 +1,7 @@
 import numpy as np
+import tensorflow as tf
+import time
+
 
 class Dataset(object):
     def __init__(self, filepath, mode=None, imsize=None):
@@ -62,11 +65,20 @@ class Dataset(object):
             self._s2 = self._s2[perm]
             self._labels = self._labels[perm]
             
+        
             # Start next epoch
             start = 0
             self._index_in_epoch = batch_size
-           
+        
+        
+        #打乱····
+        perm = np.arange(self._num_examples)
+        np.random.shuffle(perm)
+        self._images = self._images[perm]
+        self._s1 = self._s1[perm]
+        self._s2 = self._s2[perm]
+        self._labels = self._labels[perm]
+        
         # End index for slicing
         end = self._index_in_epoch
-        
         return self._images[start:end], self._s1[start:end], self._s2[start:end], self._labels[start:end]

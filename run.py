@@ -13,7 +13,7 @@ physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
 
 DATAFILE = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_8x8.npz'
-IMSIZE = 28
+IMSIZE = 8
 WALLNUMBER = 30
 GOALNUMBER = 1
 LEARNING_RATE = 0.003
@@ -30,13 +30,16 @@ LOG_DIR = '.log/'
 
 
 def train(my_model, dataset):
-    total_examples = TRAINROUND*BATCH_SIZE
+    num_batches = dataset.num_examples//BATCH_SIZE
+    total_examples = num_batches*BATCH_SIZE
+    #total_examples = TRAINROUND*BATCH_SIZE
 
     total_err = 0.0
     total_loss = 0.0
 
     for batch in range(TRAINROUND):
-        X_batch, S1_batch, S2_batch, y_batch = dataset.rollNEWMULTI(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER,mapnum=BATCH_SIZE)
+        #X_batch, S1_batch, S2_batch, y_batch = dataset.rollNEWMULTI(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER,mapnum=BATCH_SIZE)
+        X_batch, S1_batch, S2_batch, y_batch = dataset.next_batch(BATCH_SIZE)
         
         y_batch = tf.constant(y_batch)
         y_batch = tf.dtypes.cast(y_batch, dtype=tf.int64)
@@ -61,11 +64,11 @@ def train(my_model, dataset):
         with tf.GradientTape() as tape:
             logits, prob_actions,value = my_model.call(
                 X_batch, S1_batch, S2_batch, VInum=VINUM)
-            '''value = tf.slice(value,[1,0,0,1],[1,IMSIZE,IMSIZE,1])
+            value = tf.slice(value,[1,0,0,1],[1,IMSIZE,IMSIZE,1])
             value = tf.reshape(value,[-1,IMSIZE])
             value = tf.dtypes.cast(value,tf.int32)
             
-            print(value)
+            '''print(value)
             print('----------------------')'''
             cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
                 labels=y_batch, logits=logits, name='cross_entropy')
@@ -77,16 +80,19 @@ def train(my_model, dataset):
         total_err += num_err
         total_loss += loss
     
-    #tf.saved_model.save(my_model,'./SavedModel/')
+    tf.saved_model.save(my_model,'./SavedModel/')
     return total_err/total_examples, total_loss/total_examples
 
 def eval(my_model, dataset):
-    total_examples = TESTROUND*BATCH_SIZE
+    num_batches = dataset.num_examples//BATCH_SIZE
+    total_examples = num_batches*BATCH_SIZE
+    #total_examples = TESTROUND*BATCH_SIZE
 
     total_err = 0.0
     total_loss = 0.0
     for batch in range(TESTROUND):
-        X_batch, S1_batch, S2_batch, y_batch = dataset.rollNEWMULTI(width=8,height=8,wallnum=10,goalnum=1,mapnum=BATCH_SIZE)
+        #X_batch, S1_batch, S2_batch, y_batch = dataset.rollNEWMULTI(width=8,height=8,wallnum=10,goalnum=1,mapnum=BATCH_SIZE)
+        X_batch, S1_batch, S2_batch, y_batch = dataset.next_batch(BATCH_SIZE)
         X_batch = tf.dtypes.cast(X_batch,tf.float32)
         S1_batch = tf.dtypes.cast(S1_batch,tf.float32)
         S2_batch = tf.dtypes.cast(S2_batch,tf.float32)
@@ -109,8 +115,10 @@ def eval(my_model, dataset):
     return total_err/total_examples, total_loss/total_examples
 
 
-trainset = mapmaker.map(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER)
-testset = mapmaker.map(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER)
+#trainset = mapmaker.map(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER)
+#testset = mapmaker.map(width=IMSIZE,height=IMSIZE,wallnum=WALLNUMBER,goalnum=GOALNUMBER)
+trainset = dataset.Dataset(filepath=DATAFILE, mode='train', imsize=IMSIZE)
+testset = dataset.Dataset(filepath=DATAFILE, mode='test', imsize=IMSIZE)
 
 RunVIN = VIN(chi=CH_I, chh=CH_H, chq=CH_Q)
 mean_err = 0.0

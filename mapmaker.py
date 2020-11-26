@@ -2,6 +2,7 @@ import random
 import numpy as np
 import json
 import math
+import Astar
 '''
 0 = white
 1 = me
@@ -123,7 +124,9 @@ class map():
             action = 7
         
         return action
-
+    def getLableByAtar(self, singleMap,myX,myY,goalX,goalY):
+        astar = Astar.AStar(singleMap,myX,myY,goalX,goalY,self.width,self.height)
+        return astar.runAstar()
     def rollNEWSINGLE(self, singleWidth=8, singleHeight=8, wallnum=20, goalnum=1):
         '''ROLL一个新地图并返回'''
         wallmap = [[0 for col in range(singleWidth)] for row in range(
@@ -145,9 +148,10 @@ class map():
         # 转为numpy，并reshape为[height,width,2]
         wallmap = np.array(wallmap)
         goalmap = np.array(goalmap)
-        goalX = np.where(goalmap == 10)[1]
-        goalY = np.where(goalmap == 10)[0]
+        goalX = np.where(goalmap == GOAL)[1]
+        goalY = np.where(goalmap == GOAL)[0]
         lable = self.getLable(myX,myY,goalX,goalY)
+        #lable = self.getLableByAtar(wallmap,myX,myY,goalX[0],goalY[0])
         wallmap = wallmap.reshape(-1)
         goalmap = goalmap.reshape(-1)
         singlemap = np.stack((wallmap, goalmap), 1)
