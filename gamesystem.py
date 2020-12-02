@@ -126,10 +126,10 @@ class gamesystem():
         
         # 修改价值地图我的位置为最小值
         minsize = -sys.maxsize
-        myZero = [[0 for i in range(self.imSIZE)]for j in range(self.imSIZE)]
-        myZero[myY][myX] = minsize
-        myZero = tf.constant(myZero)
-        inputMap = tf.where(myZero == minsize,minsize,inputMap)
+        mask = [[0 for i in range(self.imSIZE)]for j in range(self.imSIZE)]
+        mask[myY][myX] = minsize
+        mask = tf.constant(mask)
+        inputMap = tf.where(mask == minsize,minsize,inputMap)
         outputmap = tf.dtypes.cast(inputMap,tf.int32)
         print(outputmap)
 
