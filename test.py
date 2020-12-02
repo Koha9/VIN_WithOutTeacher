@@ -45,6 +45,7 @@ def eval(my_model, dataset):
     X_mapList = []
     V_mapList = []
     goalList = []
+    game = gamesystem.gamesystem(IMSIZE,BATCH_SIZE)
     for batch in range(TESTROUND):
         #X_batch, S1_batch, S2_batch, y_batch = dataset.rollNEWMULTI(width=8,height=8,wallnum=10,goalnum=1,mapnum=BATCH_SIZE)
         X_batch, S1_batch, S2_batch, y_batch = dataset.next_batch(BATCH_SIZE)
@@ -73,7 +74,7 @@ def eval(my_model, dataset):
             X_mapList.append(X_map)
             V_mapList.append(V_map)
             goalList.append(goal)
-        roadList, stepList = gamesystem.rungame(X_mapList,V_mapList,S1_batch,S2_batch,goalList,IMSIZE,BATCH_SIZE)
+        roadList, stepList = game.rungame(X_mapList,V_mapList,S1_batch,S2_batch,goalList)
     return roadList,stepList
 
 
