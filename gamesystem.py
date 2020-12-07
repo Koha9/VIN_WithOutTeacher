@@ -173,12 +173,12 @@ class gamesystem():
             goal = goalList[i]
             singleMap = mapList[i]
             valueMap = valueMapList[i]
-            road = [nowMe]
+            road = [np.array(tf.dtypes.cast(nowMe,dtype=tf.int32)).tolist()]
             while((nowMe[0] != goal[0] or nowMe[1] != goal[1]) and validStep == True):
                 print('-------------ROUND START--------------')
                 print('GOAL',goal)
                 nowMe = self.getNewMe(singleMap,valueMap,nowMe)
-                road.append(nowMe)
+                road.append(np.array(nowMe).tolist())
                 step +=1
                 
                 if step>=self.imSIZE*4:
@@ -195,5 +195,30 @@ class gamesystem():
             print("ROUND OVER ")
             print(i)
             print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+        #roadList = np.array(roadList)
         return roadList,stepList
     
+    def runSingleGame(self, singleMap, valueMap, nowMe,goal):
+        '''获取单场game的路径与step，返回值为list与int'''
+        err = 0
+        step = 0
+        validStep = True
+        road = []
+        while((nowMe[0] != goal[0] or nowMe[1] != goal[1]) and validStep == True):
+            print('-------------ROUND START--------------')
+            print('GOAL',goal)
+            nowMe = self.getNewMe(singleMap,valueMap,nowMe)
+            road.append(np.array(nowMe).tolist())
+            step +=1
+            
+            if step>=self.imSIZE*4:
+                validStep = False
+            if (singleMap[nowMe[0]][nowMe[1]]==WALL or validStep == False):
+                err+=1
+            print('NOW STEP')
+            print(step)
+            print('NOW ERR')
+            print(err)
+            print('-----------------------------------')
+        print("ROUND OVER ")
+        return road,step

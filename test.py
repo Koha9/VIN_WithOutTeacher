@@ -35,7 +35,8 @@ WALL = 1
 GOAL = 10
 
 def makeMulti(X_map, S1, S2, goal, agentNum):
-    '''在空地上生成除了自己和终点以外的Agent'''
+    '''在空地上生成除了自己和终点以外的Agent
+        返回值为[agentNum,2]大小的numpy'''
     agentList = []
     S_map = X_map
     mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
@@ -52,7 +53,8 @@ def makeMulti(X_map, S1, S2, goal, agentNum):
         agentList.append([S2,S1])
         for i in range(agentNum-1):
             agentList.append(new_Multi[agentIndex[i]])
-        agentList = np.array(agentList)
+        agentList = np.array(agentList)# 转为numpy，由于存在[S1][S2]，将[S1][S2]转为[S1,S2]
+        agentList = tf.constant(agentList) #再转为tensor
         return agentList
     
     
@@ -86,7 +88,7 @@ def eval(my_model, dataset):
             origin_V_map = tf.slice(now_batch,[0,0,1],[IMSIZE,IMSIZE,1])
             origin_V_map = tf.reshape(origin_V_map,[-1,IMSIZE])
             goal = tf.where(origin_V_map == GOAL)[0]
-            #处理后价值地图
+            # 处理后价值地图
             V_map = tf.constant(value[i])
             V_map = tf.slice(V_map,[0,0,1],[IMSIZE,IMSIZE,1])
             V_map = tf.reshape(V_map,[-1,IMSIZE])
@@ -110,7 +112,7 @@ mean_err = 0.0
 mean_loss = 0.0
 
 roadList, stepList = eval(RunVIN, testset)
-roadList = np.array(roadList)
+#roadList = np.array(roadList)
 stepList = np.array(stepList)
 print(roadList)
 print(stepList)
