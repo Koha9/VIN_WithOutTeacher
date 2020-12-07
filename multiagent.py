@@ -6,41 +6,54 @@ NOMAL = 0
 ME = 2
 WALL = 1
 GOAL = 10
+CONGESTIONINF = 1.5
 
 class multiAgent():
     def __init__(self,imSIZE = 8,batchSize = 128):
         self.imSIZE = imSIZE
         self.batchSize = batchSize
     
-    def getCongestion(self,singleMap,agentList):
-        '''获取混雑区域坐标，返回一个numpy型'''
-        congestion = []
+    def getCongestion(self,singleMap,agentNowList):
+        '''获取混雑区域坐标，返回一个Dic [拥挤区坐标]:坐标区域所拥有最大agent数//
+        singlemap = tensor, agentNowList = list'''
+        congestion = {} # 混雑区域坐标
         isFirst = True
         agentMap = [[0 for i in range(self.imSIZE)]for j in range(self.imSIZE)]
-        for i in range(agentList.get_shape().as_list()[0]):
-            agentMap[agentList[i][0]][agentList[i][1]] = ME
+        for i in range(agentNowList.get_shape().as_list()[0]):
+            agentMap[agentNowList[i][0]][agentNowList[i][1]] = ME
         agentMap = tf.constant(agentMap)
         for j in range(1,self.imSIZE-1):
             for i in range(1,self.imSIZE-1):
                 sliceMap = tf.slice(agentMap,[j-1,i-1],[3,3])
                 agentNumInSlice = tf.where(sliceMap == ME)
-                if tf.shape(agentNumInSlice)[0]>=3:
+                numOfAgent = tf.shape(agentNumInSlice)[0] # 此区域agent数量
+                if numOfAgent >=3: # 判定为拥挤区域
                     sliceMapIndex = [[j-1,i-1],[j-1,i],[j-1,i+1],[j,i-1],[j,i],[j,i+1],[j+1,i-1],[j+1,i],[j+1,i+1]]
-                    if isFirst:
-                        congestion = sliceMapIndex
-                        isFirst = False
-                    else:
-                        congestion+=sliceMapIndex
-        congestion = np.unique(congestion,axis=0) #去重
+                    for i in range(len(sliceMapIndex)):
+                        if (sliceMapIndex[0],sliceMapIndex[1]) in congestion:
+                            congestion[sliceMapIndex[0],sliceMapIndex[1]] = max(numOfAgent,congestion[sliceMapIndex[0],sliceMapIndex[1]])
+                        else:
+                            congestion[sliceMapIndex[0],sliceMapIndex[1]] = numOfAgent
         return congestion
     
-    def getThisSingleMap(self,):
-        '''获取对应该agent的障碍物地图，将其他agent视为障碍物追加于其中'''
+    def getThisSingleMap(self,singleMap,agentNowList,thisAgent):
+        '''获取对应该agent的障碍物地图，将其他agent视为障碍物追加于其中,返回值为tensor//
+        singleMap = tensor , agentNowList = list , thisAgent = list
+        '''
+        thisSingleMap = singleMap
+        agentNowList.remove(thisAgent)
+        chacheMap = np.array(thisSingleMap).tolist()
+        for i in range(len(agentNowList)):
+            chacheMap[agentNowList[0]][agentNowList[1]]=WALL
+        thisSingleMap = tf.constant(thisSingleMap)
+        return thisSingleMap
+        
     
-    def getDistance(self,agentCDNT,goalCDNT):
-        '''计算两点间距离,返回一个float32'''
-        xDis = float(abs(agentCDNT[1] - goalCDNT[1]))
-        yDis = float(abs(agentCDNT[0] - goalCDNT[0]))
+    def getDistance(self,aCDNT,bCDNT):
+        '''计算两点间距离,返回一个float32
+        aCDNT = list,bCDNT = list'''
+        xDis = float(abs(aCDNT[1] - bCDNT[1]))
+        yDis = float(abs(aCDNT[0] - bCDNT[0]))
         if xDis == yDis:
             return xDis*np.sqrt(2)
         else:
@@ -54,50 +67,92 @@ class multiAgent():
     
     
     def checkIsCongestion(self,road,congestion):
-        '''检查是否与Congestion相同，并返回相同处的坐标，返回值为np'''
+        '''检查是否与Congestion相同，并返回相同处的坐标，返回值为np
+        road = list, congestion = Dic'''
         raod = np.array(road)
-        totalCoord = np.append(congestion,road,axis=0) # 混雑和路径坐标合并为同一np
-        only,counts = np.unique(totalCoord,return_counts=True,axis=0)
+        congestionCoord = list(congestion) # 取出key转化为list
+        totalCoord = np.append(congestionCoord,road,axis=0) # 混雑和路径坐标合并为同一np
+        only,counts = np.unique(congestionCoord,return_counts=True,axis=0)
         index = np.where(counts>1)
-        congestionCoord = only[index]
-        return congestionCoord
+        ISCongestionCoord = only[index]
+        return ISCongestionCoord
     
-    def congestionInf(self,valueMap,singleAgent,onCongestion):
-        '''根据障碍物坐标更新价值地图，仅更新周围8格'''
-        newValueMap = valueMap
+    def congestionInf(self,valueMap,agentNow,onCongestion,congestion,targetCoord):
+        '''根据障碍物坐标更新价值地图，仅更新周围8格
+        valuemap = tensor, agentNow = list,onCongestion = np, targetCoord = list'''
+        newValueMap = np.array(valueMap).tolist()
+        Inf = 0.0
+        for i in range(len(onCongestion)):
+            agnetNumInCong = congestion[onCongestion[0],onCongestion[1]]
+            distance = self.getDistance(onCongestion[i],agentNow)
+            Inf += agnetNumInCong*CONGESTIONINF/distance
+        newValueMap[targetCoord[0]][targetCoord[1]] -= Inf
+        newValueMap = tf.constant(newValueMap)
         return newValueMap
 
-    def checkSearchOver(self,):
-        '''检查寻路是否结束并返回True or False'''
+    def checkSearchOver(self,lastAction,nowAction,checkTimes,goal):
+        '''检查是否满足结束条件，返回bool型
+        lastAction = list, nowAction = list, checkTimes = int'''
+        if lastAction == nowAction or checkTimes >= 16 or nowAction == goal:
+            return False
+        else:
+            return True
         
-    def doMove(self,):
-        '''执行行动'''
-    
+    def searchAction(self,singleMap,valueMap,agentSearch,agentRoad,goal):
+        '''搜寻该轮agents最佳行进方向,并返回一个dict[agent原坐标]:动作方向坐标.
+        singlemap = tensor, valuemap = tensor, agentSearch = list, agentRoad = dict, goal = lsit'''
+        agentAction = {} # agent原坐标:动作
+        agentDisDic = {} # agent距离:原坐标
+        agentNowDic = {} # agent原坐标:现坐标
+        agentNowList = [] # agent的现坐标list
         
-    def searchAction(self,singleMap,valueMap,agentList,goal):
-        '''搜寻该轮agents最佳行进方向,并返回一个dic'''
-        '''TODO：修改返回dic为[agent]：action'''
-        agentAction = {}
-        agentDict = {}
-        congestion = self.getCongestion(singleMap,agentList)
-        for i in range(tf.shape(agentList)[0]):
-            agentDict[self.getDistance(agentList[i],goal)] = agentList[i]
-        for dis in sorted(agentDict):
+        for i in range(tf.shape(agentSearch)[0]): # 赋值
+            agentNowList.append(agentRoad[agentSearch[i][0],agentSearch[i][1]][-1])
+            agentDisDic[self.getDistance(agentSearch[i],goal)] = agentSearch[i]
+            agentNowDic[agentSearch[i][0],agentSearch[i][1]] = agentRoad[agentSearch[i][0],agentSearch[i][1]][-1]
+        '''------------------此处或需要修改论文-----------------
+        -------考虑将获取拥挤区list频率从每轮一次到每agent一次--------
+        --------------------------------------------------------'''
+        congestion = self.getCongestion(singleMap,agentSearch) # 获取拥挤区域np
+        for dis in sorted(agentDisDic): # 按距离顺序执行搜寻
             isSearchOver = False
-            thisSingleMap = getThisSingleMap()
-            thisAgent = agentDict[dis]
-            thisValueMap = valueMap
+            thisAgentOrigin = agentDisDic[dis] # 原始坐标
+            thisAgentNow = agentNowDic[thisAgentOrigin[0],thisAgentOrigin[1]]
+            thisSingleMap = self.getThisSingleMap(singleMap,agentNowList,thisAgentNow)# 初始化即将使用的障碍物map
+            thisValueMap = valueMap # 初始化即将使用的valuemap
+            
+            lastTemRoad = []#  初始化前一回合模拟路线
+            checkTimes = 0
             print('DO SOMETHING')
             if not isSearchOver:
-                tempRoad = self.getRoad(thisSingleMap,thisValueMap,thisAgent,goal)
+                checkTimes += 1
+                tempRoad = self.getRoad(thisSingleMap,thisValueMap,thisAgentNow,goal)
                 onCongestion = self.checkIsCongestion(tempRoad,congestion)
-                thisValueMap = self.congestionInf(thisValueMap,thisAgent,onCongestion) # 更新valuemap(自身周边的value)
-                isSearchOver = self.checkSearchOver()
-            agentAction[thisAgent[0],thisAgent[1]] = tempRoad[0]
+                if len(onCongestion) > 0: # 若不存在与拥挤区相交之坐标
+                    thisValueMap = self.congestionInf(thisValueMap,thisAgentNow,onCongestion) # 更新valuemap(自身周边的value)
+                    '''------------------此处或需要修改论文-----------------
+                    -------考虑将结束条件改为搜索次数达到上限而不是全部检查一次--------
+                    --------------------------------------------------------'''
+                    isSearchOver = self.checkSearchOver(lastTemRoad[0],tempRoad[0],checkTimes,goal)
+                    lastTemRoad = tempRoad
+                else:
+                    isSearchOver = True
+            else:
+                #更新该agent现在坐标位置，使其不挡别的agent的道
+                agentNowList.remove(thisAgentNow)
+                agentNowList.append(tempRoad[0])
+            
+            agentAction[thisAgentOrigin[0],thisAgentOrigin[1]] = tempRoad[0]
         return agentAction
-    def getAgentSearch(self,):
-        '''获取本轮需要更新的agent，即还未抵达goal的agent，返回一个list'''
-
+    
+    def getAgentSearch(self,agentList,agentRoad,goal):
+        '''获取本轮需要更新的agent，即还未抵达goal的agent，返回一个list
+        agentRoad = dict, goal = list'''
+        agentSearch = []
+        for i in range(len(agentList)):
+            if agentRoad[agentList[i][0],agentList[i][1]][-1] != goal:
+                agentSearch.append(agentList[i])
+        return agentSearch
     
     def runMulti(self,singleMap,valueMap,agentList,goal):
         agentList = np.array(agentList).tolist()
@@ -108,7 +163,7 @@ class multiAgent():
             agentRoad[agentList[i][0],agentList[i][1]] = [agentList[i]]
         agentSearch = self.getAgentSearch() #本轮需要更新的agent，即还未抵达goal的agent
         while len(agentSearch) > 0:
-            agentAction = self.searchAction(singleMap,valueMap,agentList,goal)
+            agentAction = self.searchAction(singleMap,valueMap,agentSearch,agentRoad,goal)
             for i in range(len(agentSearch)):# 更新step,raod
                 agentStep[agentSearch[i][0],agentSearch[i][1]]+=1
                 chacheRoad = agentRoad[agentSearch[i][0],agentSearch[i][1]]
