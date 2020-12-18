@@ -152,7 +152,9 @@ class gamesystem():
         #print('MAXINDEX',maxValueIndex[0])
         #print('MY_INDEX',meInFocusValue[0])
         if tf.size(maxValueIndex) > 2:
-            maxValueIndex = maxValueIndex[random.randint(0,np.array(tf.shape(maxValueIndex)))]
+            print('maxValueIndex:',maxValueIndex)
+            print('focusValue:',focusValue)
+            maxValueIndex = maxValueIndex[random.randint(0,np.array(tf.shape(maxValueIndex)[0]-1))]
         
         dx = maxValueIndex[0][1]-meInFocusValue[0][1]
         dy = maxValueIndex[0][0]-meInFocusValue[0][0]

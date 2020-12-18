@@ -76,7 +76,10 @@ class multiAgent():
     def checkIsCongestion(self, road, congestion):
         '''检查是否与Congestion相同，并返回相同处的坐标，返回值为np
         road = list, congestion = Dic'''
-        raod = np.array(road)
+        road = np.array(road)
+        uniqueRoad = np.unique(road, axis=0)
+        if len(road) != len(uniqueRoad): # 检查road是否存在重复并去重
+            road = uniqueRoad
         if congestion:
             congestionCoordTuple = list(congestion)  # 取出key转化为list,内部保存数据仍然为tuple
             congestionCoord = [list(congestionCoordTuple[0])]
@@ -161,6 +164,11 @@ class multiAgent():
                     checkTimes += 1
                     tempRoad = self.getRoad(
                         thisSingleMap, thisValueMap, thisAgentNow, goal)
+                    # 以获取路径是否存在3个以上的重复来判断死循环并跳出
+                    uniqueTempRoad = np.unique(tempRoad,axis=0)
+                    if len(tempRoad) - len(uniqueTempRoad) > 3:
+                        agentAction = False
+                        return agentAction
                     onCongestion = self.checkIsCongestion(tempRoad, congestion)
                     if len(onCongestion) > 0:  # 若不存在与拥挤区相交之坐标
                         #print('存在拥挤区!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
@@ -199,6 +207,7 @@ class multiAgent():
     def runMulti(self, singleMap, valueMap, agentList, goal):
         '''执行多Agent寻路，返回dict[agent原坐标]:[[路径]]  和  dict[agent原坐标]:[步数]
         singleMap = tensor, valueMap = tensor, agentList = tensor, goal = tensor'''
+        searchTimes = 0
         goal = np.array(goal).tolist()
         agentList = np.array(agentList).tolist()
         agentStep = {}  # 记录步数
@@ -211,8 +220,14 @@ class multiAgent():
             #print('////////////////////////////NEW STAGE/////////////////////////////')
             #print('//////////////')
             #print('agentSearch:',agentSearch)
+            searchTimes +=1
             agentAction = self.searchAction(
                 singleMap, valueMap, agentSearch, agentRoad, goal)
+            if not agentAction: # 当searchAction失败或陷入死循环时会返回False，此时执行跳出
+                print('SEARCH ACTION FAILD,JUMP OUT')
+                agentStep = {0:0}
+                agentRoad = {0:0}
+                return agentStep, agentRoad
             #print('AgentAction:',agentAction)
             #print('AgentSearch',agentSearch)
             #print('AgentStep:',agentStep)
@@ -224,4 +239,10 @@ class multiAgent():
                 agentRoad[agentSearch[i][0], agentSearch[i][1]] = chacheRoad
             agentSearch = self.getAgentSearch(agentList,agentRoad,goal)
             #print('///////////////////////////STAGE OVER/////////////////////////////')
+            print('searchTimes:',searchTimes)
+            if searchTimes >= len(agentList): # 防止无限死循环
+                print('SEARCH TIME OUT OF LIMIT,JUMP OUT')
+                agentStep = {0:0}
+                agentRoad = {0:0}
+                return agentStep, agentRoad
         return agentStep, agentRoad
