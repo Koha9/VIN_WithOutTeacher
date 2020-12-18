@@ -113,16 +113,16 @@ class gamesystem():
         wallMap = singleMap
         myX = int(myX)
         myY = int(myY)
-        print('MYX,MYY',myX,myY)
+        #print('MYX,MYY',myX,myY)
         outputmap = tf.dtypes.cast(inputMap,tf.int32)
-        print(outputmap)
+        #print(outputmap)
             
         # 修改价值地图墙的位置为最小值+10
         wallsize=-999999
         inputMap = tf.where(wallMap == WALL,wallsize,inputMap)
-        print('MYX,MYY',myX,myY)
+        #print('MYX,MYY',myX,myY)
         outputmap = tf.dtypes.cast(inputMap,tf.int32)
-        print(outputmap)
+        #print(outputmap)
         
         # 修改价值地图我的位置为最小值
         minsize = -sys.maxsize
@@ -131,13 +131,13 @@ class gamesystem():
         mask = tf.constant(mask)
         inputMap = tf.where(mask == minsize,minsize,inputMap)
         outputmap = tf.dtypes.cast(inputMap,tf.int32)
-        print(outputmap)
+        #print(outputmap)
 
         
         #获取切片起始位置与size
         sliceBeginX,sliceBeginY,sliceSizeX,sliceSizeY = self.focusSize(myX,myY)
         focusValue = tf.slice(inputMap,[sliceBeginY,sliceBeginX],[sliceSizeY,sliceSizeX])
-        print(focusValue)
+        #print(focusValue)
         return focusValue
 
     def getNewMe(self, singleMap, valueMap, nowMe):
@@ -148,11 +148,11 @@ class gamesystem():
         minsize = -sys.maxsize
         meInFocusValue = tf.where(focusValue == minsize) # 现在的位置 in sliceValuemap
         maxValueIndex = tf.where(focusValue == tf.reduce_max(focusValue)) # 最大value in slicevaluemap
-        print('MAXVALUE',tf.reduce_max(focusValue))
-        print('MAXINDEX',maxValueIndex[0])
-        print('MY_INDEX',meInFocusValue[0])
+        #print('MAXVALUE',tf.reduce_max(focusValue))
+        #print('MAXINDEX',maxValueIndex[0])
+        #print('MY_INDEX',meInFocusValue[0])
         if tf.size(maxValueIndex) > 2:
-            maxValueIndex = maxValueIndex[random.randint(0,tf.shape(maxValueIndex))]
+            maxValueIndex = maxValueIndex[random.randint(0,np.array(tf.shape(maxValueIndex)))]
         
         dx = maxValueIndex[0][1]-meInFocusValue[0][1]
         dy = maxValueIndex[0][0]-meInFocusValue[0][0]
@@ -174,9 +174,9 @@ class gamesystem():
             singleMap = mapList[i]
             valueMap = valueMapList[i]
             road = [np.array(tf.dtypes.cast(nowMe,dtype=tf.int32)).tolist()]
+            #print('Search i',i)
             while((nowMe[0] != goal[0] or nowMe[1] != goal[1]) and validStep == True):
-                print('-------------ROUND START--------------')
-                print('GOAL',goal)
+                #print('GOAL',goal)
                 nowMe = self.getNewMe(singleMap,valueMap,nowMe)
                 road.append(np.array(nowMe).tolist())
                 step +=1
@@ -185,16 +185,8 @@ class gamesystem():
                     validStep = False
                 if (singleMap[nowMe[0]][nowMe[1]]==WALL or validStep == False):
                     err+=1
-                print('NOW STEP')
-                print(step)
-                print('NOW ERR')
-                print(err)
-                print('-----------------------------------')
             roadList.append(road)
             stepList.append(step)
-            print("ROUND OVER ")
-            print(i)
-            print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
         #roadList = np.array(roadList)
         return roadList,stepList
     
@@ -205,8 +197,6 @@ class gamesystem():
         validStep = True
         road = []
         while((nowMe[0] != goal[0] or nowMe[1] != goal[1]) and validStep == True):
-            print('-------------ROUND START--------------')
-            print('GOAL',goal)
             nowMe = self.getNewMe(singleMap,valueMap,nowMe)
             road.append(np.array(nowMe).tolist())
             step +=1
@@ -215,10 +205,4 @@ class gamesystem():
                 validStep = False
             if (singleMap[nowMe[0]][nowMe[1]]==WALL or validStep == False):
                 err+=1
-            print('NOW STEP')
-            print(step)
-            print('NOW ERR')
-            print(err)
-            print('-----------------------------------')
-        print("ROUND OVER ")
         return road,step

@@ -34,17 +34,21 @@ ME = 2
 WALL = 1
 GOAL = 10
 
+CONGESTIONINF = 1.5 # 拥挤影响常数
+CONGESTION_GATE = 3 # 拥挤判断阈值
+
 def makeMulti(X_map, S1, S2, goal, agentNum):
     '''在空地上生成除了自己和终点以外的Agent
         返回值为[agentNum,2]大小的numpy'''
+    goal = np.array(goal).tolist()
     agentList = []
     S_map = X_map
     mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
-    mask[goal[0]][goal[1]] = GOAL
-    mask[S2][S1] = GOAL #虽然是自己但是用GOAL代替···
+    mask[goal[0]][goal[1]] = WALL
+    mask[S2][S1] = WALL #虽然是自己但是用WALL代替···
     mask = tf.constant(mask)
-    S_map = tf.where(mask == GOAL,GOAL,S_map)
-    new_Multi = tf.where(X_map == NOMAL) # 获取可以生成Agent的位置
+    S_map = tf.where(mask == WALL,WALL,S_map)
+    new_Multi = tf.where(S_map == NOMAL) # 获取可以生成Agent的位置
     agentNumMax = new_Multi.get_shape().as_list()[0]
     if(agentNumMax<=agentNum-1):
         print('ERROR:empty space is not enough!')
@@ -95,6 +99,8 @@ def eval(my_model, dataset):
             print(i)
             print(X_map)
             print(V_map)
+            print(goal)
+            print(S1_batch[i],S2_batch[i])
             X_mapList.append(X_map)
             V_mapList.append(V_map)
             goalList.append(goal)

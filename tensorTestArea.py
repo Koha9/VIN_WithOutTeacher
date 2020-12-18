@@ -1,16 +1,90 @@
-import numpy as np
 import tensorflow as tf
-import gamesystem
+import numpy as np
 import os
 import random
 import gamesystem
 
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # USE CPU
+
+DATAFILE = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_8x8.npz'
+IMSIZE = 8
+WALLNUMBER = 30
+GOALNUMBER = 1
+LEARNING_RATE = 0.003
+EPOCHS = 30
+VINUM = 36
+CH_I = 2
+CH_H = 150
+CH_Q = 10
+BATCH_SIZE = 128
+TRAINROUND = 600
+TESTROUND = 1
+USE_LOG = False
+LOG_DIR = '.log/'
 NOMAL = 0
 ME = 2
 WALL = 1
 GOAL = 10
 CONGESTIONINF = 1.5 # 拥挤影响常数
 CONGESTION_GATE = 3 # 拥挤判断阈值
+
+X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
+                     [1., 0., 0., 0., 1., 0., 0., 1.],
+                     [1., 0., 1., 0., 0., 0., 0., 1.],
+                     [1., 1., 0., 0., 0., 0., 0., 1.],
+                     [1., 1., 0., 1., 0., 1., 0., 1.],
+                     [1., 0., 0., 1., 0., 1., 0., 1.],
+                     [1., 0., 0., 0., 1., 0., 0., 1.],
+                     [1., 1., 1., 1., 1., 1., 1., 1.]])
+valueMap = tf.constant([[-2.5358171,   0.38238844, 10.299398,   22.275322,    9.626422,   23.438942,
+                         10.446101,    6.2384744],
+                        [-0.6641493,  11.328682,   25.407427,   39.544247,   58.860752,   37.445496,
+                         20.883001,    9.328241],
+                        [-0.7318544,  25.291689,   42.730484,   63.667698,   86.36546,    59.698338,
+                         34.742287,   18.05207],
+                        [-2.8683624,   5.368464,   62.70845,    84.17922,    97.84784,    79.091835,
+                         53.050903,   29.90517],
+                        [-6.356472,    7.976848,   46.13208,    44.112038,   89.02107,    49.01145,
+                         35.42552,    15.194459],
+                        [-0.9579588,  17.481594,   32.43278,    22.537163,   69.02457,    34.784977,
+                         21.192383,    6.440092],
+                        [-3.1106799,   5.739085,   15.110557,   29.534292,   27.589031,   18.979767,
+                         10.094931,   -1.0715748],
+                        [-0.13052036, -1.1766592,   1.0056585,   2.0830042,   2.210154,   -2.3517637,
+                         -0.98517996,  0.94388855]])
+S1 = tf.constant(4)
+S2 = tf.constant(4)
+goal = tf.constant([3, 4])
+
+
+def makeMulti(X_map, S1, S2, goal, agentNum):
+    '''在空地上生成除了自己和终点以外的Agent
+        返回值为[agentNum,2]大小的numpy'''
+    goal = np.array(goal).tolist()
+    agentList = []
+    S_map = X_map
+    mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
+    mask[goal[0]][goal[1]] = WALL
+    mask[S2][S1] = WALL #虽然是自己但是用WALL代替···
+    mask = tf.constant(mask)
+    S_map = tf.where(mask == WALL,WALL,S_map)
+    new_Multi = tf.where(S_map == NOMAL) # 获取可以生成Agent的位置
+    agentNumMax = new_Multi.get_shape().as_list()[0]
+    if(agentNumMax<=agentNum-1):
+        print('ERROR:empty space is not enough!')
+    else:
+        agentIndex = random.sample(range(agentNumMax),agentNum-1)
+        agentList.append([S2,S1])
+        for i in range(agentNum-1):
+            agentList.append(new_Multi[agentIndex[i]])
+        agentList = np.array(agentList)# 转为numpy，由于存在[S1][S2]，将[S1][S2]转为[S1,S2]
+        agentList = tf.constant(agentList) #再转为tensor
+        return agentList
+
+
+
+
 
 class multiAgent():
     def __init__(self, imSIZE=8, batchSize=128):
@@ -98,10 +172,7 @@ class multiAgent():
         for i in range(len(onCongestion)):
             agnetNumInCong = congestion[onCongestion[i][0], onCongestion[i][1]]
             distance = self.getDistance(onCongestion[i], agentNow)
-            if distance == 0:
-                Inf += 0
-            else:
-                Inf += agnetNumInCong*CONGESTIONINF/distance
+            Inf += agnetNumInCong*CONGESTIONINF/distance
         newValueMap[actionCoord[0]][actionCoord[1]] -= Inf
         newValueMap = tf.constant(newValueMap)
         return newValueMap
@@ -142,18 +213,18 @@ class multiAgent():
             numOfAgentInDis = len(agentDisDic[dis])
             indexOfDis = random.sample(range(numOfAgentInDis),numOfAgentInDis)
             for index in range(numOfAgentInDis):
-                #print('/===========================ACTION SEARCH==========================\\')
+                print('/===========================ACTION SEARCH==========================\\')
                 isSearchOver = False
                 thisAgentOrigin = agentDisDic[dis][indexOfDis[index]] # 处理当agent距离相同时随机选择agent进行寻路
                 thisAgentNow = agentNowDic[thisAgentOrigin[0], thisAgentOrigin[1]] # agent现在位置
                 thisSingleMap = self.getThisSingleMap(
                     singleMap, agentNowList, thisAgentNow)  # 初始化即将使用的障碍物map
                 thisValueMap = valueMap  # 初始化即将使用的valuemap
-                #print('/===================state==================\\')
-                #print('|thisAgentOrigin:',thisAgentOrigin)
-                #print('|thisAgentNow   :',thisAgentNow,type(thisAgentNow))
-                #print('|agentNowDic    :',agentNowDic)
-                #print('|agentNowList   :',agentNowList)
+                print('/===================state==================\\')
+                print('|thisAgentOrigin:',thisAgentOrigin)
+                print('|thisAgentNow   :',thisAgentNow,type(thisAgentNow))
+                print('|agentNowDic    :',agentNowDic)
+                print('|agentNowList   :',agentNowList)
 
                 lastTemRoad = []  # 初始化前一回合模拟路线
                 checkTimes = 0
@@ -163,7 +234,7 @@ class multiAgent():
                         thisSingleMap, thisValueMap, thisAgentNow, goal)
                     onCongestion = self.checkIsCongestion(tempRoad, congestion)
                     if len(onCongestion) > 0:  # 若不存在与拥挤区相交之坐标
-                        #print('存在拥挤区!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                        print('存在拥挤区!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
                         thisValueMap = self.congestionInf(
                             thisValueMap, thisAgentNow, onCongestion, congestion,tempRoad[0])  # 更新valuemap(自身周边的value)
                         '''------------------此处或需要修改论文-----------------
@@ -176,7 +247,7 @@ class multiAgent():
                                 lastTemRoad[0], tempRoad[0], checkTimes, goal)
                         lastTemRoad = tempRoad
                     else:
-                        #print('不存在拥挤区~')
+                        print('不存在拥挤区~')
                         isSearchOver = True
                 else:
                     # 更新该agent现在坐标位置，使其不挡别的agent的道
@@ -184,7 +255,7 @@ class multiAgent():
                     agentNowList.append(tempRoad[0])
                 # 将动作添加至动作dict
                 agentAction[thisAgentOrigin[0], thisAgentOrigin[1]] = tempRoad[0]
-                #print('\\========================ACTION SEARCH OVER========================/')
+                print('\\========================ACTION SEARCH OVER========================/')
         return agentAction
 
     def getAgentSearch(self, agentList, agentRoad, goal):
@@ -208,14 +279,14 @@ class multiAgent():
             agentRoad[agentList[i][0], agentList[i][1]] = [agentList[i]]
         agentSearch = self.getAgentSearch(agentList,agentRoad,goal)  # 本轮需要更新的agent，即还未抵达goal的agent
         while len(agentSearch) > 0:
-            #print('////////////////////////////NEW STAGE/////////////////////////////')
-            #print('//////////////')
-            #print('agentSearch:',agentSearch)
+            print('////////////////////////////NEW STAGE/////////////////////////////')
+            print('//////////////')
+            print('agentSearch:',agentSearch)
             agentAction = self.searchAction(
                 singleMap, valueMap, agentSearch, agentRoad, goal)
-            #print('AgentAction:',agentAction)
-            #print('AgentSearch',agentSearch)
-            #print('AgentStep:',agentStep)
+            print('AgentAction:',agentAction)
+            print('AgentSearch',agentSearch)
+            print('AgentStep:',agentStep)
             for i in range(len(agentSearch)):  # 更新step,raod
                 agentStep[agentSearch[i][0], agentSearch[i][1]] += 1
                 chacheRoad = agentRoad[agentSearch[i][0], agentSearch[i][1]]
@@ -223,5 +294,15 @@ class multiAgent():
                     agentAction[agentSearch[i][0], agentSearch[i][1]])
                 agentRoad[agentSearch[i][0], agentSearch[i][1]] = chacheRoad
             agentSearch = self.getAgentSearch(agentList,agentRoad,goal)
-            #print('///////////////////////////STAGE OVER/////////////////////////////')
+            print('///////////////////////////STAGE OVER/////////////////////////////')
         return agentStep, agentRoad
+
+
+agentList = makeMulti(X_map, S1, S2, goal, 20)
+print(agentList)
+multi = multiAgent()
+agentStep,agentRoad = multi.runMulti(X_map,valueMap,agentList,goal)
+print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!OVER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+print(agentStep)
+print(agentRoad)
+
