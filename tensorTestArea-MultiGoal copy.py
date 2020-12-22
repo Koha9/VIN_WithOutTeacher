@@ -9,7 +9,7 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # USE CPU
 
 DATAFILE = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_8x8.npz'
-IMSIZE = 8
+IMSIZE = 28
 WALLNUMBER = 30
 GOALNUMBER = 1
 LEARNING_RATE = 0.003
@@ -35,7 +35,7 @@ VIN = vin_multiGoal.VIN()
 VIN.load_weights(checkpoint_save_path)
 
 
-X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
+'''#X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                      [1., 0., 0., 0., 1., 0., 0., 1.],
                      [1., 0., 1., 0., 0., 0., 0., 1.],
                      [1., 1., 0., 0., 0., 0., 0., 1.],
@@ -43,7 +43,7 @@ X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                      [1., 0., 0., 1., 0., 1., 0., 1.],
                      [1., 0., 0., 0., 1., 0., 0., 1.],
                      [1., 1., 1., 1., 1., 1., 1., 1.]])
-'''valueMap = tf.constant([[-2.5358171,   0.38238844, 10.299398,   22.275322,    9.626422,   23.438942,
+valueMap = tf.constant([[-2.5358171,   0.38238844, 10.299398,   22.275322,    9.626422,   23.438942,
                          10.446101,    6.2384744],
                         [-0.6641493,  11.328682,   25.407427,   39.544247,   58.860752,   37.445496,
                          20.883001,    9.328241],
@@ -59,9 +59,24 @@ X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                          10.094931,   -1.0715748],
                         [-0.13052036, -1.1766592,   1.0056585,   2.0830042,   2.210154,   -2.3517637,
                          -0.98517996,  0.94388855]])'''
-S1 = tf.constant(4)
-S2 = tf.constant(4)
-goal = tf.constant([3, 4])
+#S1 = tf.constant(4)
+#S2 = tf.constant(4)
+#goal = tf.constant([3, 4])
+
+trainmapfile = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_28x28.npz'
+map_num = 7
+data = np.load(trainmapfile, allow_pickle=True)
+orgin_map = data['arr_0'][0][map_num][3:]
+
+mapdata = orgin_map.reshape((-1, 28, 28, 2)).transpose((0, 3, 1, 2))
+X_map = mapdata[0][0]
+exit_map = mapdata[0][1]
+goal = tf.where(exit_map == GOAL)[0]
+S1 = tf.constant(2)
+S2 = tf.constant(2)
+print(X_map)
+print(exit_map)
+print(goal)
 
 def makeExits(X_map, mapsize, exit_num, goal):
     '''在空地上生成除了自己和终点以外的Agent
@@ -94,10 +109,13 @@ def makeMulti(X_map, S1, S2, goal, agentNum):
     '''在空地上生成除了自己和终点以外的Agent
         返回值为[agentNum,2]大小的numpy'''
     goal = np.array(goal).tolist()
+    if np.array(tf.shape(tf.shape(goal))) == 1:
+        goal = [goal]
     agentList = []
     S_map = X_map
     mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
-    mask[goal[0]][goal[1]] = WALL
+    for i in range(len(goal)):
+        mask[goal[i][0]][goal[i][1]] = WALL
     mask[S2][S1] = WALL #虽然是自己但是用WALL代替···
     mask = tf.constant(mask)
     S_map = tf.where(mask == WALL,WALL,S_map)
@@ -128,23 +146,27 @@ def callVIN(obs_map, exit_map, agent_x=0, agent_y=0):
     sent_map = np.insert(united_map, 0, [agent_y, agent_x])
     sent_map = sent_map[tf.newaxis, ...]
 
-    vector, q_map = VIN(sent_map)  # vector是各个方向的值 ，q_map是价值地图
-    vector = tf.reshape(vector, -1)
+    q_map = VIN(sent_map)  # vector是各个方向的值 ，q_map是价值地图
 
 
+
+    print('1:',q_map)
+    q_map = tf.reshape(q_map,-1)
     q_map = tf.nn.softmax(q_map)
-    print(vector)
-    print(q_map)
+    q_map = tf.reshape(q_map, [28, 28])
+    print("----------------")
+    print('3:',q_map)
     return q_map
 
 
 
-
+#该版本针对多goal进行修改
 class multiAgent():
-    def __init__(self, imSIZE=8, batchSize=128):
+    def __init__(self, imSIZE=8, batchSize=128,goalNum = 4):
         self.imSIZE = imSIZE
         self.batchSize = batchSize
         self.ONCongeCount = 0
+        self.goalNum = goalNum
 
     def getCongestion(self, singleMap, agentNowList):
         '''获取混雑区域坐标，返回一个Dic [拥挤区坐标]:坐标区域所拥有最大agent数//
@@ -234,7 +256,9 @@ class multiAgent():
     def checkSearchOver(self, lastAction, nowAction, checkTimes, goal):
         '''检查是否满足结束条件，返回bool型
         lastAction = list, nowAction = list, checkTimes = int'''
-        if lastAction == nowAction or checkTimes >= 16 or nowAction == goal:
+        if np.array(tf.shape(tf.shape(goal))) == 1:# 单个goal时添加一个维度
+            goal = [goal]
+        if lastAction == nowAction or checkTimes >= 16 or nowAction in goal:
             return False
         else:
             return True
@@ -246,13 +270,18 @@ class multiAgent():
         agentDisDic = {}  # agent距离:原坐标
         agentNowDic = {}  # agent原坐标:现坐标
         agentNowList = []  # agent的现坐标list
-
+        if np.array(tf.shape(tf.shape(goal))) == 1:
+            goal = [goal]
         for i in range(tf.shape(agentSearch)[0]):  # 初始化
             agentNowList.append(
                 agentRoad[agentSearch[i][0], agentSearch[i][1]][-1])
             agentNowDic[agentSearch[i][0], agentSearch[i][1]
                         ] = agentRoad[agentSearch[i][0], agentSearch[i][1]][-1]
-            distance = self.getDistance(agentSearch[i], goal)
+            distance = self.imSIZE*4
+            for gi in range(len(goal)):# 获取最小的于goal的距离
+                temp = self.getDistance(agentSearch[i], goal[gi])
+                if temp < distance:
+                    distance = temp
             if distance in agentDisDic: # 若存在距离相同agent
                 temp = agentDisDic[distance]
                 temp.append(agentSearch[i])
@@ -382,14 +411,15 @@ class multiAgent():
         return agentStep, agentRoad
 
 
-agentList = makeMulti(X_map, S1, S2, goal, 20)
 goalList,goalMap = makeExits(X_map,8,4,goal)
+agentList = makeMulti(X_map, S1, S2, goalList, 20)
 valueMap = callVIN(X_map,goalMap,S1,S2)
 print(agentList)
 print(goalList)
-#multi = multiAgent()
-#agentStep,agentRoad = multi.runMulti(X_map,valueMap,agentList,goal)
-#print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!OVER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-#print(agentStep)
-#print(agentRoad)
+print(valueMap)
+multi = multiAgent()
+agentStep,agentRoad = multi.runMulti(X_map,valueMap,agentList,goal)
+print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!OVER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+print(agentStep)
+print(agentRoad)
 

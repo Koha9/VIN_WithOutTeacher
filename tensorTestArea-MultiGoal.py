@@ -4,21 +4,22 @@ import os
 import random
 import gamesystem
 import vin_multiGoal
+import dataset
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # USE CPU
 
-DATAFILE = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_8x8.npz'
-IMSIZE = 8
+DATAFILE = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_28x28.npz'
+IMSIZE = 28
 WALLNUMBER = 30
-GOALNUMBER = 1
+GOALNUMBER = 4
 LEARNING_RATE = 0.003
 EPOCHS = 30
 VINUM = 36
 CH_I = 2
 CH_H = 150
 CH_Q = 10
-BATCH_SIZE = 128
+BATCH_SIZE = 1
 TRAINROUND = 600
 TESTROUND = 1
 USE_LOG = False
@@ -35,7 +36,7 @@ VIN = vin_multiGoal.VIN()
 VIN.load_weights(checkpoint_save_path)
 
 
-X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
+'''#X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                      [1., 0., 0., 0., 1., 0., 0., 1.],
                      [1., 0., 1., 0., 0., 0., 0., 1.],
                      [1., 1., 0., 0., 0., 0., 0., 1.],
@@ -43,7 +44,7 @@ X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                      [1., 0., 0., 1., 0., 1., 0., 1.],
                      [1., 0., 0., 0., 1., 0., 0., 1.],
                      [1., 1., 1., 1., 1., 1., 1., 1.]])
-'''valueMap = tf.constant([[-2.5358171,   0.38238844, 10.299398,   22.275322,    9.626422,   23.438942,
+valueMap = tf.constant([[-2.5358171,   0.38238844, 10.299398,   22.275322,    9.626422,   23.438942,
                          10.446101,    6.2384744],
                         [-0.6641493,  11.328682,   25.407427,   39.544247,   58.860752,   37.445496,
                          20.883001,    9.328241],
@@ -59,24 +60,51 @@ X_map = tf.constant([[1., 1., 1., 1., 1., 1., 1., 1.],
                          10.094931,   -1.0715748],
                         [-0.13052036, -1.1766592,   1.0056585,   2.0830042,   2.210154,   -2.3517637,
                          -0.98517996,  0.94388855]])'''
-S1 = tf.constant(4)
-S2 = tf.constant(4)
-goal = tf.constant([3, 4])
+#S1 = tf.constant(4)
+#S2 = tf.constant(4)
+#goal = tf.constant([3, 4])
 
+trainmapfile = 'G:/OneDrive/TEU/Tensor/VIN_TensorFlow-master/data/gridworld_28x28.npz'
+map_num = 0
+data = np.load(trainmapfile, allow_pickle=True)
+orgin_map = data['arr_0'][0][map_num][3:]
+
+mapdata = orgin_map.reshape((-1, 28, 28, 2)).transpose((0, 3, 1, 2))
+X_map = mapdata[0][0]
+exit_map = mapdata[0][1]
+goal = tf.where(exit_map == GOAL)[0]
+S1 = tf.constant(14)
+S2 = tf.constant(14)
+
+'''testset = dataset.Dataset(filepath=DATAFILE, mode='train', imsize=IMSIZE)
+X_batch, S1_batch, S2_batch, y_batch = testset.next_batch(BATCH_SIZE)
+S1 = tf.dtypes.cast(S1_batch[0], dtype=tf.int64)
+S2 = tf.dtypes.cast(S2_batch[0], dtype=tf.int64)
+now_batch = tf.constant(X_batch[0])
+X_map = tf.slice(now_batch,[0,0,0],[IMSIZE,IMSIZE,1])
+X_map = tf.reshape(X_map,[-1,IMSIZE])
+goal_Map = tf.slice(now_batch,[0,0,1],[IMSIZE,IMSIZE,1])
+goal_Map = tf.reshape(goal_Map,[-1,IMSIZE])
+goal = tf.where(goal_Map == GOAL)[0]'''
+
+'''--------------------创建多agent与多goal--------------------'''
 def makeExits(X_map, mapsize, exit_num, goal):
     '''在空地上生成除了自己和终点以外的Agent
     返回值为[agentNum,2]大小的numpy
     X_map = tensor, mapsize = int, exit_num = int, goal = tensor
     '''
+    exit_xlist = [3, 22, 5]
+    exit_ylist = [24, 24, 3]
     goal = np.array(goal).tolist()
     exitlist = [goal]
     exit_map = np.zeros_like(X_map)
     exit_map[goal[0]][goal[1]] = GOAL
+    
     while exit_num-1:
         while True:
             flag = True  # 为了检测新的出口有没有在出口list出现过
-            exit_x = random.randint(1, mapsize - 2)
-            exit_y = random.randint(1, mapsize - 2)
+            exit_y = exit_xlist[exit_num-1-1]
+            exit_x = exit_ylist[exit_num-1-1]
 
             getway = [exit_x, exit_y]
             inexitlist = exitlist
@@ -94,10 +122,13 @@ def makeMulti(X_map, S1, S2, goal, agentNum):
     '''在空地上生成除了自己和终点以外的Agent
         返回值为[agentNum,2]大小的numpy'''
     goal = np.array(goal).tolist()
+    if np.array(tf.shape(tf.shape(goal))) == 1:
+        goal = [goal]
     agentList = []
     S_map = X_map
     mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
-    mask[goal[0]][goal[1]] = WALL
+    for i in range(len(goal)):
+        mask[goal[i][0]][goal[i][1]] = WALL
     mask[S2][S1] = WALL #虽然是自己但是用WALL代替···
     mask = tf.constant(mask)
     S_map = tf.where(mask == WALL,WALL,S_map)
@@ -113,8 +144,9 @@ def makeMulti(X_map, S1, S2, goal, agentNum):
         agentList = np.array(agentList)# 转为numpy，由于存在[S1][S2]，将[S1][S2]转为[S1,S2]
         agentList = tf.constant(agentList) #再转为tensor
         return agentList
+'''--------------------创建多agent与多goal--------------------'''
 
-
+'''--------------------VIN部分--------------------'''
 def uniteMap(obsmap, exitmap):
     obsmap = np.array(obsmap)
     obsmap = obsmap.reshape(-1)
@@ -128,18 +160,16 @@ def callVIN(obs_map, exit_map, agent_x=0, agent_y=0):
     sent_map = np.insert(united_map, 0, [agent_y, agent_x])
     sent_map = sent_map[tf.newaxis, ...]
 
-    vector, q_map = VIN(sent_map)  # vector是各个方向的值 ，q_map是价值地图
-    vector = tf.reshape(vector, -1)
+    q_map = VIN(sent_map)  # vector是各个方向的值 ，q_map是价值地图
 
-
+    q_map = tf.reshape(q_map,-1)
     q_map = tf.nn.softmax(q_map)
-    print(vector)
-    print(q_map)
+    q_map = tf.reshape(q_map, [28, 28])
     return q_map
+'''--------------------VIN部分--------------------'''
 
 
-
-
+#----------------------多agent运行部分--------------------
 class multiAgent():
     def __init__(self, imSIZE=8, batchSize=128):
         self.imSIZE = imSIZE
@@ -204,7 +234,10 @@ class multiAgent():
     def checkIsCongestion(self, road, congestion):
         '''检查是否与Congestion相同，并返回相同处的坐标，返回值为np
         road = list, congestion = Dic'''
-        raod = np.array(road)
+        road = np.array(road)
+        uniqueRoad = np.unique(road, axis=0)
+        if len(road) != len(uniqueRoad): # 检查road是否存在重复并去重
+            road = uniqueRoad
         if congestion:
             congestionCoordTuple = list(congestion)  # 取出key转化为list,内部保存数据仍然为tuple
             congestionCoord = [list(congestionCoordTuple[0])]
@@ -226,7 +259,10 @@ class multiAgent():
         for i in range(len(onCongestion)):
             agnetNumInCong = congestion[onCongestion[i][0], onCongestion[i][1]]
             distance = self.getDistance(onCongestion[i], agentNow)
-            Inf += agnetNumInCong*CONGESTIONINF/distance
+            if distance == 0:
+                Inf += 0
+            else:
+                Inf += agnetNumInCong*CONGESTIONINF/distance
         newValueMap[actionCoord[0]][actionCoord[1]] -= Inf
         newValueMap = tf.constant(newValueMap)
         return newValueMap
@@ -234,7 +270,9 @@ class multiAgent():
     def checkSearchOver(self, lastAction, nowAction, checkTimes, goal):
         '''检查是否满足结束条件，返回bool型
         lastAction = list, nowAction = list, checkTimes = int'''
-        if lastAction == nowAction or checkTimes >= 16 or nowAction == goal:
+        if np.array(tf.shape(tf.shape(goal))) == 1:# 单个goal时添加一个维度
+            goal = [goal]
+        if lastAction == nowAction or checkTimes >= 16 or nowAction in goal:
             return False
         else:
             return True
@@ -246,13 +284,18 @@ class multiAgent():
         agentDisDic = {}  # agent距离:原坐标
         agentNowDic = {}  # agent原坐标:现坐标
         agentNowList = []  # agent的现坐标list
-
+        if np.array(tf.shape(tf.shape(goal))) == 1:
+            goal = [goal]
         for i in range(tf.shape(agentSearch)[0]):  # 初始化
             agentNowList.append(
                 agentRoad[agentSearch[i][0], agentSearch[i][1]][-1])
             agentNowDic[agentSearch[i][0], agentSearch[i][1]
                         ] = agentRoad[agentSearch[i][0], agentSearch[i][1]][-1]
-            distance = self.getDistance(agentSearch[i], goal)
+            distance = self.imSIZE*4
+            for gi in range(len(goal)):# 获取最小的于goal的距离
+                temp = self.getDistance(agentSearch[i], goal[gi])
+                if temp < distance:
+                    distance = temp
             if distance in agentDisDic: # 若存在距离相同agent
                 temp = agentDisDic[distance]
                 temp.append(agentSearch[i])
@@ -267,18 +310,18 @@ class multiAgent():
             numOfAgentInDis = len(agentDisDic[dis])
             indexOfDis = random.sample(range(numOfAgentInDis),numOfAgentInDis)
             for index in range(numOfAgentInDis):
-                print('/===========================ACTION SEARCH==========================\\')
+                #print('/===========================ACTION SEARCH==========================\\')
                 isSearchOver = False
                 thisAgentOrigin = agentDisDic[dis][indexOfDis[index]] # 处理当agent距离相同时随机选择agent进行寻路
                 thisAgentNow = agentNowDic[thisAgentOrigin[0], thisAgentOrigin[1]] # agent现在位置
                 thisSingleMap = self.getThisSingleMap(
                     singleMap, agentNowList, thisAgentNow)  # 初始化即将使用的障碍物map
                 thisValueMap = valueMap  # 初始化即将使用的valuemap
-                print('/===================state==================\\')
-                print('|thisAgentOrigin:',thisAgentOrigin)
-                print('|thisAgentNow   :',thisAgentNow,type(thisAgentNow))
-                print('|agentNowDic    :',agentNowDic)
-                print('|agentNowList   :',agentNowList)
+                #print('/===================state==================\\')
+                #print('|thisAgentOrigin:',thisAgentOrigin)
+                #print('|thisAgentNow   :',thisAgentNow,type(thisAgentNow))
+                #print('|agentNowDic    :',agentNowDic)
+                #print('|agentNowList   :',agentNowList)
 
                 lastTemRoad = []  # 初始化前一回合模拟路线
                 checkTimes = 0
@@ -286,9 +329,15 @@ class multiAgent():
                     checkTimes += 1
                     tempRoad = self.getRoad(
                         thisSingleMap, thisValueMap, thisAgentNow, goal)
+                    # 以获取路径是否存在3个以上的重复来判断死循环并跳出
+                    uniqueTempRoad = np.unique(tempRoad,axis=0)
+                    if len(tempRoad) - len(uniqueTempRoad) > 3:
+                        print('road > 3,tempRoad:',tempRoad)
+                        agentAction = False
+                        return agentAction
                     onCongestion = self.checkIsCongestion(tempRoad, congestion)
                     if len(onCongestion) > 0:  # 若不存在与拥挤区相交之坐标
-                        print('存在拥挤区!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+                        #print('存在拥挤区!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
                         thisValueMap = self.congestionInf(
                             thisValueMap, thisAgentNow, onCongestion, congestion,tempRoad[0])  # 更新valuemap(自身周边的value)
                         '''------------------此处或需要修改论文-----------------
@@ -301,7 +350,7 @@ class multiAgent():
                                 lastTemRoad[0], tempRoad[0], checkTimes, goal)
                         lastTemRoad = tempRoad
                     else:
-                        print('不存在拥挤区~')
+                        #print('不存在拥挤区~')
                         isSearchOver = True
                 else:
                     # 更新该agent现在坐标位置，使其不挡别的agent的道
@@ -309,21 +358,28 @@ class multiAgent():
                     agentNowList.append(tempRoad[0])
                 # 将动作添加至动作dict
                 agentAction[thisAgentOrigin[0], thisAgentOrigin[1]] = tempRoad[0]
-                print('\\========================ACTION SEARCH OVER========================/')
+                #print('\\========================ACTION SEARCH OVER========================/')
         return agentAction
 
     def getAgentSearch(self, agentList, agentRoad, goal):
         '''获取本轮需要更新的agent，即还未抵达goal的agent，返回一个list
         agentRoad = dict, goal = list'''
+        if np.array(tf.shape(tf.shape(goal))) == 1:# 单个goal时添加一个维度
+            goal = [goal]
         agentSearch = []
         for i in range(len(agentList)):
-            if agentRoad[agentList[i][0], agentList[i][1]][-1] != goal:
+            if agentRoad[agentList[i][0], agentList[i][1]][-1] not in goal:
                 agentSearch.append(agentList[i])
         return agentSearch
 
     def runMulti(self, singleMap, valueMap, agentList, goal):
         '''执行多Agent寻路，返回dict[agent原坐标]:[[路径]]  和  dict[agent原坐标]:[步数]
-        singleMap = tensor, valueMap = tensor, agentList = tensor, goal = tensor'''
+        singleMap = tensor, valueMap = tensor, agentList = tensor, goal = tensor
+        singlemap:单独一张的障碍物map
+        valueMap：该障碍物的value map
+        agentList:就···这个
+        goal：goallist'''
+        searchTimes = 0
         goal = np.array(goal).tolist()
         agentList = np.array(agentList).tolist()
         agentStep = {}  # 记录步数
@@ -333,14 +389,20 @@ class multiAgent():
             agentRoad[agentList[i][0], agentList[i][1]] = [agentList[i]]
         agentSearch = self.getAgentSearch(agentList,agentRoad,goal)  # 本轮需要更新的agent，即还未抵达goal的agent
         while len(agentSearch) > 0:
-            print('////////////////////////////NEW STAGE/////////////////////////////')
-            print('//////////////')
-            print('agentSearch:',agentSearch)
+            #print('////////////////////////////NEW STAGE/////////////////////////////')
+            #print('//////////////')
+            #print('agentSearch:',agentSearch)
+            searchTimes +=1
             agentAction = self.searchAction(
                 singleMap, valueMap, agentSearch, agentRoad, goal)
-            print('AgentAction:',agentAction)
-            print('AgentSearch',agentSearch)
-            print('AgentStep:',agentStep)
+            if not agentAction: # 当searchAction失败或陷入死循环时会返回False，此时执行跳出
+                print('SEARCH ACTION FAILD,JUMP OUT')
+                agentStep = {0:0}
+                agentRoad = {0:0}
+                return agentStep, agentRoad
+            #print('AgentAction:',agentAction)
+            #print('AgentSearch',agentSearch)
+            #print('AgentStep:',agentStep)
             for i in range(len(agentSearch)):  # 更新step,raod
                 agentStep[agentSearch[i][0], agentSearch[i][1]] += 1
                 chacheRoad = agentRoad[agentSearch[i][0], agentSearch[i][1]]
@@ -348,48 +410,26 @@ class multiAgent():
                     agentAction[agentSearch[i][0], agentSearch[i][1]])
                 agentRoad[agentSearch[i][0], agentSearch[i][1]] = chacheRoad
             agentSearch = self.getAgentSearch(agentList,agentRoad,goal)
-            print('///////////////////////////STAGE OVER/////////////////////////////')
+            #print('///////////////////////////STAGE OVER/////////////////////////////')
+            print('searchTimes:',searchTimes)
+            if searchTimes >= len(agentList): # 防止无限死循环
+                print('SEARCH TIME OUT OF LIMIT,JUMP OUT')
+                agentStep = {0:0}
+                agentRoad = {0:0}
+                return agentStep, agentRoad
         return agentStep, agentRoad
+#----------------------多agent运行部分--------------------
 
-    def runMultiGoal(self, singleMap, valueMap, agentList, goal):
-        '''执行多Agent多Goal寻路，返回dict[agent原坐标]:[[路径]]  和  dict[agent原坐标]:[步数]
-        singleMap = tensor, valueMap = tensor, agentList = tensor, goal = tensor'''
-        goal = np.array(goal).tolist()
-        agentList = np.array(agentList).tolist()
-        agentStep = {}  # 记录步数
-        agentRoad = {}  # 记录路程
-        for i in range(len(agentList)):# 初始化agentStep和agentRoad
-            agentStep[agentList[i][0], agentList[i][1]] = 0
-            agentRoad[agentList[i][0], agentList[i][1]] = [agentList[i]]
-        agentSearch = self.getAgentSearch(agentList,agentRoad,goal)  # 本轮需要更新的agent，即还未抵达goal的agent
-        while len(agentSearch) > 0:
-            print('////////////////////////////NEW STAGE/////////////////////////////')
-            print('//////////////')
-            print('agentSearch:',agentSearch)
-            agentAction = self.searchAction(
-                singleMap, valueMap, agentSearch, agentRoad, goal)
-            print('AgentAction:',agentAction)
-            print('AgentSearch',agentSearch)
-            print('AgentStep:',agentStep)
-            for i in range(len(agentSearch)):  # 更新step,raod
-                agentStep[agentSearch[i][0], agentSearch[i][1]] += 1
-                chacheRoad = agentRoad[agentSearch[i][0], agentSearch[i][1]]
-                chacheRoad.append(
-                    agentAction[agentSearch[i][0], agentSearch[i][1]])
-                agentRoad[agentSearch[i][0], agentSearch[i][1]] = chacheRoad
-            agentSearch = self.getAgentSearch(agentList,agentRoad,goal)
-            print('///////////////////////////STAGE OVER/////////////////////////////')
-        return agentStep, agentRoad
-
-
-agentList = makeMulti(X_map, S1, S2, goal, 20)
-goalList,goalMap = makeExits(X_map,8,4,goal)
+goalList,goalMap = makeExits(X_map,IMSIZE,GOALNUMBER,goal)
+agentList = makeMulti(X_map, S1, S2, goalList, 20)
 valueMap = callVIN(X_map,goalMap,S1,S2)
-print(agentList)
-print(goalList)
-#multi = multiAgent()
-#agentStep,agentRoad = multi.runMulti(X_map,valueMap,agentList,goal)
-#print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!OVER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
-#print(agentStep)
-#print(agentRoad)
+print('X_map:',X_map)
+print('goalMap:',goalMap)
+print('goalList:',goalList)
+print('valueMap:',valueMap)
+multi = multiAgent(imSIZE=IMSIZE,batchSize=1)
+agentStep,agentRoad = multi.runMulti(X_map,valueMap,agentList,goalList)
+print('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!OVER!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!')
+print(agentStep)
+print(agentRoad)
 

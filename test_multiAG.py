@@ -39,30 +39,56 @@ CONGESTIONINF = 1.5 # 拥挤影响常数
 CONGESTION_GATE = 3 # 拥挤判断阈值
 MULTIAGENTNUM = 20 # 多agent数量
 
-def makeMulti(X_map, S1, S2, goal, agentNum):
+def makeExits(X_map, mapsize, exit_num, goal):
     '''在空地上生成除了自己和终点以外的Agent
-        返回值为[agentNum,2]大小的numpy'''
+    返回值为[agentNum,2]大小的numpy
+    X_map = tensor, mapsize = int, exit_num = int, goal = tensor
+    '''
     goal = np.array(goal).tolist()
-    agentList = []
-    S_map = X_map
-    mask = [[0 for i in range(IMSIZE)]for j in range(IMSIZE)]
-    mask[goal[0]][goal[1]] = WALL
-    mask[S2][S1] = WALL #虽然是自己但是用WALL代替···
-    mask = tf.constant(mask)
-    S_map = tf.where(mask == WALL,WALL,S_map)
-    new_Multi = tf.where(S_map == NOMAL) # 获取可以生成Agent的位置
-    agentNumMax = new_Multi.get_shape().as_list()[0]
-    if(agentNumMax<=agentNum-1):
-        print('ERROR:empty space is not enough!')
-    else:
-        agentIndex = random.sample(range(agentNumMax),agentNum-1)
-        agentList.append([S2,S1])
-        for i in range(agentNum-1):
-            agentList.append(new_Multi[agentIndex[i]])
-        agentList = np.array(agentList)# 转为numpy，由于存在[S1][S2]，将[S1][S2]转为[S1,S2]
-        agentList = tf.constant(agentList) #再转为tensor
-        return agentList
-    
+    exitlist = [goal]
+    while exit_num-1:
+        while True:
+            flag = True  # 为了检测新的出口有没有在出口list出现过
+            exit_x = random.randint(1, mapsize - 2)
+            exit_y = random.randint(1, mapsize - 2)
+
+            getway = [exit_x, exit_y]
+            inexitlist = exitlist
+            if getway in inexitlist:
+                flag = False
+            if (X_map[exit_y][exit_x] == 0 and flag):
+                exitlist.append(getway)
+                exit_num -= 1
+                break
+    exitlist = np.array(exitlist)
+    return exitlist
+
+def makeAgents(X_map, mapsize, exit_num, goal):
+    '''在空地上生成除了自己和终点以外的Agent
+    返回值为[agentNum,2]大小的numpy
+    X_map = tensor, mapsize = int, exit_num = int, goal = tensor
+    '''
+    goal = np.array(goal).tolist()
+    exitlist = [goal]
+    exit_map = np.zeros_like(X_map)
+    exit_map[goal[0]][goal[1]] = GOAL
+    while exit_num-1:
+        while True:
+            flag = True  # 为了检测新的出口有没有在出口list出现过
+            exit_x = random.randint(1, mapsize - 2)
+            exit_y = random.randint(1, mapsize - 2)
+
+            getway = [exit_x, exit_y]
+            inexitlist = exitlist
+            if getway in inexitlist:
+                flag = False
+            if (X_map[exit_y][exit_x] == 0 and flag):
+                exit_map[exit_y][exit_x] = GOAL
+                exitlist.append(getway)
+                exit_num -= 1
+                break
+    exitlist = np.array(exitlist)
+    return exitlist, exit_map
     
 def eval(my_model, dataset):
     num_batches = dataset.num_examples//BATCH_SIZE
@@ -112,7 +138,7 @@ def eval(my_model, dataset):
         #print(V_map)
         #print(goal)
         #print(S1_batch[i],S2_batch[i])
-        multiAgentList = makeMulti(X_map,S1,S2,goal,MULTIAGENTNUM)
+        multiAgentList = makeAgents(X_map,S1,S2,goal,MULTIAGENTNUM)
         multiGame = multiagent.multiAgent()
         thisAgentStep,thisAgentRoad = multiGame.runMulti(X_map,V_map,multiAgentList,goal)
         
